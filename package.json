@@ -9,7 +9,7 @@
 		"lint:fix": "eslint --cache . --fix",
 		"test": "npm run lint && npm run test:unit",
 		"test:unit": "node --test",
-		"check": "node --check src/updates.js && node --check src/main.js && node --check src/commit-message.js"
+		"check": "node --check src/updates.js && node --check src/main.js && node --check src/commit-message.js && node --check src/docker-images.js"
 	},
 	"engines": {
 		"node": ">=22"
@@ -17,6 +17,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@actions/core": "^3.0.1",
+		"dockerfile-ast": "^0.7.1",
 		"jsonc-parser": "^3.3.1",
 		"semver": "^7.8.5",
 		"tar": "^7.5.22"

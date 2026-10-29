@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -192,4 +192,47 @@ test('updates only engine values, keeps formatting, and synchronizes lockfile me
 	assert.equal(lock.packages[''].engines.node, '>=24.3.1');
 	assert.equal(lock.packages['node_modules/test'].version, '1.0.0');
 	assert.equal(result.files.length, 2);
+});
+
+test('waits for root Dockerfile images before changing a nested manifest or lockfile', async (t) => {
+	let directory = await mkdtemp(path.join(tmpdir(), 'node-security-deferred-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	let filename = path.join(directory, 'packages/service/package.json');
+	let lockfile = path.join(path.dirname(filename), 'package-lock.json');
+	let original = JSON.stringify({ engines: { node: '24' } });
+	let lock = JSON.stringify({ packages: { '': { engines: { node: '24' } } } });
+	let workspace = directory;
+	await mkdir(path.dirname(filename), { recursive: true });
+	await writeFile(path.join(workspace, 'Dockerfile'), 'FROM node:24-slim');
+	await writeFile(filename, original);
+	await writeFile(lockfile, lock);
+	let result = await updatePackage(filename, {
+		index,
+		advisories,
+		workspace,
+		inspectImage: async () => ({ os: 'linux', architecture: 'amd64', config: { Env: [ 'NODE_VERSION=24.2.1' ] } }),
+	});
+	assert.equal(result.range, '24');
+	assert.deepEqual(result.updates, []);
+	assert.deepEqual(result.files, []);
+	assert.equal(result.pendingImages.length, 1);
+	assert.equal(await readFile(filename, 'utf8'), original);
+	assert.equal(await readFile(lockfile, 'utf8'), lock);
+
+	result = await updatePackage(filename, {
+		index,
+		advisories,
+		workspace,
+		inspectImage: async () => ({ config: { Env: [ 'NODE_VERSION=24.3.1' ] } }),
+	});
+
+	assert.equal(result.range, '^24.3.1');
+	assert.equal(result.files.length, 2);
+	assert.equal(JSON.parse(await readFile(filename, 'utf8')).engines.node, '^24.3.1');
+	assert.equal(JSON.parse(await readFile(lockfile, 'utf8')).packages[''].engines.node, '^24.3.1');
+
+	result = await updatePackage(filename, { index, advisories, workspace, inspectImage: () => { throw new Error('should not inspect without updates'); } });
+	assert.deepEqual(result.updates, []);
+	assert.deepEqual(result.files, []);
+	assert.equal(result.pendingImages, undefined);
 });
