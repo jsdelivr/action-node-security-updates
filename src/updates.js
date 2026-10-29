@@ -153,6 +153,12 @@ export async function findUpdates (range, options = {}) {
 				branches[i] = [ `>=${version}`, ...upperBounds.map(comparator => comparator.value) ].join(' ');
 			}
 
+			let caret = `^${version}`;
+
+			if (semver.validRange(branches[i]) === semver.validRange(caret)) {
+				branches[i] = caret;
+			}
+
 			updates.push({ version, severity, advisories: releaseAdvisories, previous: minimum.version });
 			break;
 		}

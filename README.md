@@ -104,7 +104,9 @@ upper bound. `>=24` stays open-ended and only its Node.js 24 minimum is advanced
 it does not cause an upgrade of that minimum to Node.js 26.
 
 Each `||` branch is handled independently, so `^22.0.0 || ^24.0.0` can retain
-separate security minimums for both majors. Caret notation is preserved. Other
+separate security minimums for both majors. Caret notation is preserved, and
+equivalent major bounds use caret notation: `22 || 24` becomes, for example,
+`^22.23.4 || ^24.22.1`. Tighter and open-ended bounds are preserved. Other
 valid semver ranges with a stable minimum are supported; wildcard ranges without
 a major minimum are rejected. A fix outside an existing upper bound fails visibly
 instead of widening the range. Exact versions are advanced within the same major.
@@ -113,10 +115,10 @@ For a fix in `24.22.1`, common inputs become:
 
 | Before | After |
 | --- | --- |
-| `24` | `>=24.22.1 <25.0.0-0` |
+| `24` | `^24.22.1` |
 | `^24` | `^24.22.1` |
 | `>= 24` | `>=24.22.1` |
-| `~24` | `>=24.22.1 <25.0.0-0` |
+| `~24` | `^24.22.1` |
 
 Existing npm lockfile v2/v3 root engine metadata is synchronized without changing
 dependency versions. No dependency installation runs in the caller's project.

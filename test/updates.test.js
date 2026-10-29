@@ -28,7 +28,7 @@ async function find (range, options = {}) {
 
 test('selects security fixes within the existing major, excluding normal releases', async () => {
 	let result = await find('>=24.0.0 <25');
-	assert.equal(result.range, '>=24.3.1 <25');
+	assert.equal(result.range, '^24.3.1');
 	assert.deepEqual(result.updates.map(update => update.version), [ '24.3.1' ]);
 });
 
@@ -49,7 +49,7 @@ test('does nothing when the minimum already includes all security fixes', async 
 });
 
 test('handles common engines notations', async () => {
-	assert.equal((await find('24')).range, '>=24.3.1 <25.0.0-0');
+	assert.equal((await find('24')).range, '^24.3.1');
 	assert.equal((await find('^24')).range, '^24.3.1');
 	assert.equal((await find('>= 24')).range, '>=24.3.1');
 });
@@ -60,7 +60,33 @@ test('does not turn an open-ended minimum into an upgrade to another major', asy
 
 test('advances exact versions and normalizes major wildcards without adding majors', async () => {
 	assert.equal((await find('24.0.0')).range, '24.3.1');
-	assert.equal((await find('24.x')).range, '>=24.3.1 <25.0.0-0');
+	assert.equal((await find('24.x')).range, '^24.3.1');
+});
+
+test('uses caret notation for equivalent major bounds while retaining other constraints', async () => {
+	for (let [ before, after ] of [
+		[ '~24', '^24.3.1' ],
+		[ '>=24.0.0 <25.0.0-0', '^24.3.1' ],
+		[ '>=24.0.0 <24.4', '>=24.3.1 <24.4' ],
+		[ '~24.3', '>=24.3.1 <24.4.0-0' ],
+		[ '24.3.x', '>=24.3.1 <24.4.0-0' ],
+		[ '>=24.0.0 <=25.0.0', '>=24.3.1 <=25.0.0' ],
+		[ '>=24.0.0 <25.0.0-beta.1', '>=24.3.1 <25.0.0-beta.1' ],
+	]) {
+		let result = await find(before);
+		assert.equal(result.range, after, before);
+
+		for (let version of [ '24.3.0', '24.3.1', '24.3.9', '24.4.0', '24.9.0', '25.0.0-alpha.1', '25.0.0' ]) {
+			assert.equal(semver.satisfies(version, result.range), semver.gte(version, '24.3.1') && semver.satisfies(version, before), `${before}: ${version}`);
+		}
+	}
+});
+
+test('rewrites updated major-only OR branches as independent caret ranges', async () => {
+	let result = await find('22 || 24', { minimumSeverity: 'medium' });
+	assert.equal(result.range, '^22.8.1 || ^24.3.1');
+	assert.equal((await find('22 || 24')).range, '22 || ^24.3.1');
+	assert.equal((await find(result.range, { minimumSeverity: 'medium' })).range, result.range);
 });
 
 for (let range of [ '~24', '~24.x', '~24.3', '~24.3.0' ]) {
