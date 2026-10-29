@@ -98,6 +98,22 @@ test('defers missing manifests but fails on registry, authentication and command
 	await assert.rejects(inspectImage('node:24-slim', async () => ({ stdout: 'invalid json' })), /invalid registry response/);
 });
 
+test('labels inspection timeouts and Docker exits without exposing diagnostics', async () => {
+	for (let [ details, reason ] of [
+		[{ killed: true, code: null }, 'inspection timed out' ],
+		[{ code: 7 }, 'Docker exited with code 7' ],
+		[{ code: 'ENOENT' }, 'ENOENT' ],
+		[{ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }, 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ],
+	]) {
+		let cause = Object.assign(new Error('private diagnostic'), { stderr: 'private diagnostic', ...details });
+		await assert.rejects(inspectImage('node:24-slim', async () => { throw cause; }), (error) => {
+			assert.equal(error.message, `Unable to inspect Docker image node:24-slim: ${reason}.`);
+			assert.equal(error.cause, cause);
+			return true;
+		});
+	}
+});
+
 test('accepts the security version or later patches in every advertised platform', async (t) => {
 	let filename = await fixture(t);
 	assert.deepEqual(await checkDockerImages(filename, updates, async () => ({

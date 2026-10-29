@@ -79,7 +79,15 @@ export async function inspectImage (image, command = run) {
 			return null;
 		}
 
-		throw new Error(`Unable to inspect Docker image ${image}: ${error.code || 'invalid registry response'}.`, { cause: error });
+		let reason = error.code || 'invalid registry response';
+
+		if (error.killed) {
+			reason = 'inspection timed out';
+		} else if (typeof error.code === 'number') {
+			reason = `Docker exited with code ${error.code}`;
+		}
+
+		throw new Error(`Unable to inspect Docker image ${image}: ${reason}.`, { cause: error });
 	}
 }
 
