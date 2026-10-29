@@ -1,0 +1,28 @@
+{
+	"name": "action-node-security-updates",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Prepare Node.js security update pull requests without pinning Docker images.",
+	"type": "module",
+	"scripts": {
+		"lint": "eslint --cache .",
+		"lint:fix": "eslint --cache . --fix",
+		"test": "npm run lint && npm run test:unit",
+		"test:unit": "node --test",
+		"check": "node --check src/updates.js && node --check src/main.js && node --check src/commit-message.js"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"license": "MIT",
+	"dependencies": {
+		"@actions/core": "^3.0.1",
+		"jsonc-parser": "^3.3.1",
+		"semver": "^7.8.5",
+		"tar": "^7.5.22"
+	},
+	"devDependencies": {
+		"@martin-kolarik/eslint-config": "^9.0.1",
+		"eslint": "^10.13.0"
+	}
+}

@@ -1,0 +1,77 @@
+name: Node.js security updates
+description: Open a PR raising engines.node for Node.js security releases, while keeping Docker tags floating.
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  token:
+    description: GitHub token with contents and pull requests write access. Use a GitHub App token or PAT to trigger PR workflows automatically.
+    required: false
+    default: ${{ github.token }}
+  package-file:
+    description: Package manifest to update, relative to the caller checkout.
+    required: false
+    default: package.json
+  minimum-severity:
+    description: Lowest qualifying advisory severity (low, medium, high, or critical).
+    required: false
+    default: high
+  branch:
+    description: Branch used for the security update pull request.
+    required: false
+    default: node-security-updates
+  dry-run:
+    description: Prepare local changes without opening or updating a pull request.
+    required: false
+    default: 'false'
+
+outputs:
+  updated:
+    description: Whether a qualifying security update was prepared.
+    value: ${{ steps.update.outputs.updated }}
+  node-range:
+    description: The resulting engines.node range.
+    value: ${{ steps.update.outputs.node-range }}
+  pull-request-number:
+    description: Number of the created or updated pull request.
+    value: ${{ steps.pr.outputs.pull-request-number }}
+  pull-request-url:
+    description: URL of the created or updated pull request.
+    value: ${{ steps.pr.outputs.pull-request-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up the action runtime
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: '24'
+
+    - name: Install the action dependencies
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: npm ci --prefix "$ACTION_PATH" --omit=dev --ignore-scripts --no-audit --no-fund
+
+    - name: Prepare security updates
+      id: update
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PACKAGE_FILE: ${{ inputs.package-file }}
+        MINIMUM_SEVERITY: ${{ inputs.minimum-severity }}
+      run: node "$ACTION_PATH/src/main.js"
+
+    - name: Create or update the pull request
+      id: pr
+      if: inputs.dry-run != 'true'
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+      with:
+        token: ${{ inputs.token }}
+        branch: ${{ inputs.branch }}
+        title: ${{ steps.update.outputs.commit-message }}
+        commit-message: ${{ steps.update.outputs.commit-message }}
+        body: ${{ steps.update.outputs.pr-body }}
+        add-paths: ${{ steps.update.outputs.changed-files || inputs.package-file }}
+        delete-branch: true
