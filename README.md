@@ -84,7 +84,7 @@ The repository must also allow GitHub Actions to create pull requests when using
 `GITHUB_TOKEN`; workflow permissions cannot override that setting.
 
 The checkout should be clean and on the default branch. This action does not merge
-PRs, deploy services, edit Dockerfiles, inspect image versions, or enforce engines.
+PRs, deploy services, edit Dockerfiles, or enforce engines.
 It sets up Node.js 24 for its own steps, so put it in a dedicated update job.
 
 ## Version ranges
@@ -173,10 +173,17 @@ unknown severity, invalid data, and network errors fail visibly rather than
 silently reporting that no update is needed. If the advisory repository lags
 behind a release, a later scheduled run retries with fresh data.
 
+For official `node` base images in the root `Dockerfile`, the action waits until
+the referenced images contain the fix across advertised platforms and literal
+`FROM --platform` requirements. Waiting runs leave files and existing PRs unchanged;
+later scheduled runs retry. Pinned images need a separate Dockerfile update.
+
+This automatic check requires Docker CLI with Buildx (included on GitHub-hosted
+Ubuntu runners). It supports plain image references and simple ARG defaults.
+
 This covers Node.js runtime security releases, not distribution package or npm
 dependency vulnerabilities. It cannot provide fixes for unsupported Node.js
-majors. Docker image publication and architecture availability are not checked.
-Only the minimum major in each range branch is tracked: use separate `||` branches
+majors. Only the minimum major in each range branch is tracked: use separate `||` branches
 to track multiple Node.js majors explicitly.
 
 ## Development

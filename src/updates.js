@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { Parser } from 'tar';
 import { applyEdits, modify } from 'jsonc-parser';
 import semver from 'semver';
+import { checkDockerImages } from './docker-images.js';
 
 const severities = [ 'low', 'medium', 'high', 'critical' ];
 
@@ -175,6 +176,12 @@ export async function updatePackage (filename, options = {}) {
 
 	if (!result.updates.length) {
 		return { ...result, files };
+	}
+
+	let pendingImages = await checkDockerImages(path.join(options.workspace || path.dirname(filename), 'Dockerfile'), result.updates, options.inspectImage);
+
+	if (pendingImages.length) {
+		return { range: manifest.engines.node, updates: [], files, pendingImages };
 	}
 
 	let pending = [{ filename, source, jsonPath: [ 'engines', 'node' ] }];

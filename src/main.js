@@ -12,8 +12,9 @@ try {
 		throw new Error('package-file must be inside the caller checkout.');
 	}
 
-	let result = await updatePackage(filename, { minimumSeverity: process.env.MINIMUM_SEVERITY || 'high' });
+	let result = await updatePackage(filename, { minimumSeverity: process.env.MINIMUM_SEVERITY || 'high', workspace });
 
+	core.setOutput('deferred', Boolean(result.pendingImages?.length));
 	core.setOutput('updated', result.updates.length > 0);
 	core.setOutput('node-range', result.range);
 	core.setOutput('changed-files', result.files.map(file => path.relative(workspace, file).split(path.sep).join('/')).join('\n'));
@@ -35,7 +36,12 @@ try {
 	].join('\n');
 
 	core.setOutput('pr-body', body);
-	core.info(result.updates.length ? `Updated engines.node to ${result.range}` : 'No qualifying Node.js security updates.');
+
+	if (result.pendingImages?.length) {
+		core.info(`Waiting for Docker image publication; leaving the existing PR untouched:\n${result.pendingImages.join('\n')}`);
+	} else {
+		core.info(result.updates.length ? `Updated engines.node to ${result.range}` : 'No qualifying Node.js security updates.');
+	}
 } catch (error) {
 	core.setFailed(error.message);
 }

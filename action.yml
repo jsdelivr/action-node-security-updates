@@ -65,7 +65,7 @@ runs:
 
     - name: Create or update the pull request
       id: pr
-      if: inputs.dry-run != 'true'
+      if: inputs.dry-run != 'true' && steps.update.outputs.deferred != 'true'
       uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         token: ${{ inputs.token }}
