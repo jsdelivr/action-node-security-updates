@@ -13,10 +13,6 @@ inputs:
     description: Package manifest to update, relative to the caller checkout.
     required: false
     default: package.json
-  minimum-severity:
-    description: Lowest qualifying advisory severity (low, medium, high, or critical).
-    required: false
-    default: high
   branch:
     description: Branch used for the security update pull request.
     required: false
@@ -28,7 +24,7 @@ inputs:
 
 outputs:
   updated:
-    description: Whether a qualifying security update was prepared.
+    description: Whether a security update was prepared.
     value: ${{ steps.update.outputs.updated }}
   node-range:
     description: The resulting engines.node range.
@@ -60,7 +56,6 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
         PACKAGE_FILE: ${{ inputs.package-file }}
-        MINIMUM_SEVERITY: ${{ inputs.minimum-severity }}
       run: node "$ACTION_PATH/src/main.js"
 
     - name: Create or update the pull request

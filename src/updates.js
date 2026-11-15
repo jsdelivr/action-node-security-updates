@@ -1,77 +1,21 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import { Parser } from 'tar';
 import { applyEdits, modify } from 'jsonc-parser';
 import semver from 'semver';
 import { checkDockerImages } from './docker-images.js';
 
-const severities = [ 'low', 'medium', 'high', 'critical' ];
-
-async function getResponse (url) {
+export async function loadSources () {
+	let url = 'https://nodejs.org/dist/index.json';
 	let response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
 
 	if (!response.ok) {
 		throw new Error(`Unable to fetch ${url}: HTTP ${response.status}`);
 	}
 
-	return response;
-}
-
-export async function loadSources () {
-	let [ indexResponse, archive ] = await Promise.all([
-		getResponse('https://nodejs.org/dist/index.json'),
-		getResponse('https://codeload.github.com/nodejs/security-wg/tar.gz/refs/heads/main'),
-	]);
-	let advisories = [];
-
-	// Read individual records; the generated core/index.json can lag behind them.
-	// Parse in memory without extracting any archive paths onto the caller's disk.
-	let parser = new Parser({
-		strict: true,
-		onReadEntry (entry) {
-			let match = entry.path.match(/^[^/]+\/vuln\/core\/(\d+)\.json$/);
-
-			if (!match || entry.type !== 'File') {
-				entry.resume(); return;
-			}
-
-			let chunks = [];
-			entry.on('data', (chunk) => { chunks.push(chunk); });
-
-			entry.on('end', () => {
-				try {
-					let advisory = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-
-					if (!semver.validRange(advisory.patched)) {
-						throw new Error(`Invalid patched range in advisory ${match[1]}.`);
-					}
-
-					advisories.push({ ...advisory, id: match[1], url: `https://github.com/nodejs/security-wg/blob/main/vuln/core/${match[1]}.json` });
-				} catch (error) {
-					parser.abort(error);
-				}
-			});
-		},
-	});
-
-	await pipeline(Readable.fromWeb(archive.body), parser);
-
-	if (!advisories.length) {
-		throw new Error('Node.js security archive has no individual core advisories.');
-	}
-
-	return { index: await indexResponse.json(), advisories };
+	return { index: await response.json() };
 }
 
 export async function findUpdates (range, options = {}) {
-	let { minimumSeverity = 'high' } = options;
-
-	if (!severities.includes(minimumSeverity)) {
-		throw new Error(`Invalid minimum severity: ${minimumSeverity}`);
-	}
-
 	if (typeof range !== 'string' || !semver.validRange(range)) {
 		throw new Error('package.json must declare a valid engines.node minimum.');
 	}
@@ -83,32 +27,10 @@ export async function findUpdates (range, options = {}) {
 		throw new Error('Each engines.node branch must have a stable, explicit Node.js major minimum.');
 	}
 
-	let { index, advisories } = options.index && options.advisories ? options : await loadSources();
+	let { index } = options.index === undefined ? await loadSources() : options;
 
-	if (!Array.isArray(index) || !index.length || !Array.isArray(advisories)) {
-		throw new Error('Invalid Node.js release index or security advisories.');
-	}
-
-	let fixes = new Map();
-
-	for (let advisory of advisories) {
-		if (typeof advisory.patched !== 'string' || !semver.validRange(advisory.patched)) {
-			throw new Error('Invalid advisory patched range.');
-		}
-
-		for (let branch of advisory.patched.split('||')) {
-			let fixed = semver.minVersion(branch);
-
-			if (!fixed || fixed.prerelease.length) {
-				throw new Error('Invalid advisory fixed version.');
-			}
-
-			if (!fixes.has(fixed.version)) {
-				fixes.set(fixed.version, []);
-			}
-
-			fixes.get(fixed.version).push(advisory);
-		}
+	if (!Array.isArray(index) || !index.length) {
+		throw new Error('Invalid Node.js release index.');
 	}
 
 	let updates = [];
@@ -121,21 +43,6 @@ export async function findUpdates (range, options = {}) {
 
 		for (let candidate of candidates) {
 			let version = semver.clean(candidate.version);
-			let releaseAdvisories = fixes.get(version);
-
-			if (!releaseAdvisories) {
-				throw new Error(`Unable to classify published Node.js security release ${version}.`);
-			}
-
-			if (releaseAdvisories.some(advisory => !severities.includes(advisory.severity))) {
-				throw new Error(`Unknown advisory severity for Node.js ${version}.`);
-			}
-
-			let severity = severities[Math.max(...releaseAdvisories.map(advisory => severities.indexOf(advisory.severity)))];
-
-			if (severities.indexOf(severity) < severities.indexOf(minimumSeverity)) {
-				continue;
-			}
 
 			let branch = branches[i];
 
@@ -160,7 +67,7 @@ export async function findUpdates (range, options = {}) {
 				branches[i] = caret;
 			}
 
-			updates.push({ version, severity, advisories: releaseAdvisories, previous: minimum.version });
+			updates.push({ version, previous: minimum.version });
 			break;
 		}
 	}
