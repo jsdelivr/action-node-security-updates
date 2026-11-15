@@ -1,8 +1,8 @@
 # Node.js security updates
 
 A GitHub Action that opens a pull request raising `package.json`'s `engines.node`
-minimum when Node.js publishes a qualifying security release. HIGH and CRITICAL
-releases qualify by default. Ordinary releases do not create PRs.
+minimum when Node.js publishes a security release. All security releases qualify.
+Ordinary releases do not create PRs.
 
 Keep Docker tags such as `node:24-bookworm-slim` floating. Merging the engine update
 can trigger your existing build/release pipeline, while later normal rebuilds
@@ -99,7 +99,7 @@ For example:
 }
 ```
 
-A qualifying security release in Node.js 24 raises the lower bound, preserving the
+A security release in Node.js 24 raises the lower bound, preserving the
 upper bound. `>=24` stays open-ended and only its Node.js 24 minimum is advanced;
 it does not cause an upgrade of that minimum to Node.js 26.
 
@@ -129,7 +129,6 @@ dependency versions. No dependency installation runs in the caller's project.
 | --- | --- | --- |
 | `token` | `github.token` | Token for PR creation. |
 | `package-file` | `package.json` | One manifest relative to the checkout root. |
-| `minimum-severity` | `high` | `low`, `medium`, `high`, or `critical`. |
 | `branch` | `node-security-updates` | One maintained PR branch per repository. |
 | `dry-run` | `false` | Set to `true` to modify local files without creating a PR. |
 
@@ -152,26 +151,15 @@ their changes are already on the default branch. A clean run creates no new PR.
 
 ## Detection
 
-The action reads the individual advisory JSON files in the official
-[Node.js security repository](https://github.com/nodejs/security-wg/tree/main/vuln/core).
-It downloads one repository archive and reads those records in memory; it does
-not parse blogs or RSS. The generated aggregate `index.json` is ignored because
-it can lag behind the individual records.
+The action reads the official
+[Node.js release index](https://nodejs.org/dist/index.json). For each supported
+major, it selects the newest published release marked `security: true` above the
+current minimum. All security releases qualify, regardless of severity. Ordinary
+releases do not produce a PR, and advisory data and release notes are not fetched.
+PRs list the previous and updated Node.js versions.
 
-An advisory's `patched` semver branches identify the first fixed version in each
-major, and its `severity` determines whether that release qualifies. The action
-cross-checks those versions against the official
-[Node.js release index](https://nodejs.org/dist/index.json) (`security: true`).
-Only published security releases qualify; a newer ordinary release does not
-produce a PR. The highest severity among advisories fixed in that particular
-release is used, so a HIGH fix in one major does not promote a MEDIUM fix in another.
-PRs include available advisory descriptions, CVEs, and official announcement links,
-with direct links to the structured records for reference.
-
-Every run refreshes the sources. Unclassifiable published security releases,
-unknown severity, invalid data, and network errors fail visibly rather than
-silently reporting that no update is needed. If the advisory repository lags
-behind a release, a later scheduled run retries with fresh data.
+Every run refreshes the release index. Invalid index data and network errors fail
+visibly rather than silently reporting that no update is needed.
 
 For official `node` base images in the root `Dockerfile`, the action waits until
 the referenced images contain the fix across advertised platforms and literal
@@ -195,5 +183,5 @@ npm run check
 ```
 
 The action installs its own locked dependencies at runtime instead of checking in
-a generated JavaScript bundle. Tests use local fixtures and do not create GitHub
-branches or PRs.
+a generated JavaScript bundle. Tests use mocked release data and do not create
+GitHub branches or PRs.

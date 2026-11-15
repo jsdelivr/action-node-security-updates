@@ -12,7 +12,7 @@ try {
 		throw new Error('package-file must be inside the caller checkout.');
 	}
 
-	let result = await updatePackage(filename, { minimumSeverity: process.env.MINIMUM_SEVERITY || 'high', workspace });
+	let result = await updatePackage(filename, { workspace });
 
 	core.setOutput('deferred', Boolean(result.pendingImages?.length));
 	core.setOutput('updated', result.updates.length > 0);
@@ -23,16 +23,7 @@ try {
 	let body = [
 		'Raise the minimum supported Node.js version for security fixes.',
 		'',
-		...result.updates.flatMap(update => [
-			`- Node.js ${update.previous} → ${update.version}: **${update.severity.toUpperCase()}**.`,
-			...update.advisories.map((advisory) => {
-				let label = advisory.cve?.join(', ') || `Advisory ${advisory.id}`;
-				let description = advisory.description ? `: ${advisory.description.replace(/\s+/g, ' ').trim()}` : '.';
-				return `  - [${label}](${advisory.url}) (${advisory.severity})${description}`;
-			}),
-			...[ ...new Set(update.advisories.map(advisory => advisory.ref).filter(Boolean)) ]
-				.map(url => `\n  [Security announcement](${url})`),
-		]),
+		...result.updates.map(update => `- Node.js ${update.previous} → ${update.version}.`),
 	].join('\n');
 
 	core.setOutput('pr-body', body);
